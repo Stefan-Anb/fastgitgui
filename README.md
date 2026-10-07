@@ -14,9 +14,11 @@ Python-Backend, natives Webview (WebView2 unter Windows), GUI vollständig lokal
 - **Fetch vor dem Commit** mit Warnung, wenn der lokale Stand hinter Origin liegt
 - **Diff-Ansicht** mit Zeilennummern und Syntax-Highlighting (Pygments, praktisch alle gängigen Sprachen), optional ohne Whitespace-Änderungen
 - **Branch-Wechsel** mit Suche, auch zu Branches, die nur auf dem Remote existieren
+- **Pull (nur Fast-Forward) und Push** auf Origin, Push mit Bestätigung; ohne Upstream wird beim Push einer gesetzt
+- **Verwerfen** einzelner Dateien oder aller Änderungen (mit Bestätigung; neue Dateien werden gelöscht)
 - Schnellzugriff auf den Projektordner und VS Code
 
-Bewusst nicht enthalten: Editor, Branch anlegen, Mergen, Rebase, Push, Pull.
+Bewusst nicht enthalten: Editor, Branch anlegen, Mergen, Rebase. Pull läuft nur als Fast-Forward, Push nie als Force-Push.
 
 ## Voraussetzungen
 

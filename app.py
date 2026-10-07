@@ -195,12 +195,24 @@ class Api:
         return True
 
     @api
+    def discard(self, path, paths):
+        return gitops.discard(self._repo(path), paths)
+
+    @api
     def precommit_check(self, path):
         return gitops.behind_info(self._repo(path))
 
     @api
     def commit(self, path, message):
         return gitops.commit(self._repo(path), message)
+
+    @api
+    def pull(self, path):
+        return gitops.pull(self._repo(path))
+
+    @api
+    def push(self, path):
+        return gitops.push(self._repo(path))
 
     @api
     def open_folder(self, path):

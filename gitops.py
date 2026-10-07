@@ -592,3 +592,83 @@ def file_diff(repo, sha, f, ignore_ws=False, full=False):
             n += 1
         count += 1
     return res
+
+
+# --- Pull / Push ------------------------------------------------------------------
+
+def _upstream(repo):
+    rc, out, _ = run(repo, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], check=False)
+    return out.decode().strip() if rc == 0 else None
+
+
+def _branch(repo):
+    name = text(repo, ["branch", "--show-current"]).strip()
+    if not name:
+        raise GitError("Detached HEAD: kein Branch ausgewaehlt.")
+    return name
+
+
+def pull(repo):
+    """Nur Fast-Forward. Bei divergierenden Staenden bricht git ab, kein Merge."""
+    _branch(repo)
+    if not _upstream(repo):
+        raise GitError("Der Branch hat keinen Upstream.")
+    rc, out, err = run(repo, ["pull", "--ff-only"], timeout=180, network=True)
+    return (out.decode("utf-8", "replace").strip() or err).splitlines()[-1] if (out or err) else "Pull abgeschlossen"
+
+
+def push(repo):
+    branch = _branch(repo)
+    if _upstream(repo):
+        args = ["push"]
+    else:
+        rem = remotes(repo)
+        if not rem:
+            raise GitError("Kein Remote konfiguriert.")
+        remote = "origin" if "origin" in rem else sorted(rem)[0]
+        args = ["push", "-u", remote, branch]
+    rc, out, err = run(repo, args, timeout=180, network=True)
+    lines = [l for l in err.splitlines() if l.strip()]
+    return lines[-1] if lines else "Push abgeschlossen"
+
+
+# --- Verwerfen ----------------------------------------------------------------------
+
+def _in_head(repo, path):
+    return run(repo, ["cat-file", "-e", f"HEAD:{path}"], check=False)[0] == 0
+
+
+def discard(repo, paths):
+    """Verwirft Aenderungen (Index und Arbeitsverzeichnis) gegen HEAD.
+    paths=None: alles. Dateien, die es in HEAD nicht gibt, werden geloescht."""
+    entries = status(repo, numstat=False)["files"]
+    if paths is not None:
+        wanted = set(paths)
+        entries = [e for e in entries if e["path"] in wanted]
+    restore, remove = [], []
+    for e in entries:
+        for p in [e["orig"], e["path"]]:
+            if not p:
+                continue
+            if not e["untracked"] and _in_head(repo, p):
+                restore.append(p)
+            elif p == e["path"]:
+                remove.append(p)
+    if remove:
+        tracked = [p for p in remove if run(repo, ["ls-files", "--error-unmatch", "--", p], check=False)[0] == 0]
+        if tracked:
+            run(repo, ["rm", "-f", "-q", "--cached", "--pathspec-from-file=-", "--pathspec-file-nul"],
+                stdin=_pathspec(tracked))
+    if restore:
+        run(repo, ["restore", "--source=HEAD", "--staged", "--worktree",
+                   "--pathspec-from-file=-", "--pathspec-file-nul"], stdin=_pathspec(restore))
+    root = os.path.realpath(repo)
+    for p in remove:
+        full = os.path.realpath(os.path.join(repo, p))
+        if not full.startswith(root + os.sep):
+            raise GitError(f"Pfad ausserhalb des Repos: {p}")
+        try:
+            os.remove(full)
+        except FileNotFoundError:
+            pass
+    return {"restored": len(set(restore)), "deleted": len(remove)}

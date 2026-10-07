@@ -18,6 +18,7 @@ async function call(name, ...args) {
 const ICON = {
   add: '<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>',
   scan: '<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z"/><path d="M9 9.5h3M10.5 8v3"/></svg>',
+  undo: '<svg viewBox="0 0 16 16"><path d="M3 6h6.5a3.5 3.5 0 0 1 0 7H6"/><path d="M5.5 3.5L3 6l2.5 2.5"/></svg>',
   fetch: '<svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>',
 };
 
@@ -223,6 +224,9 @@ function renderTopbar() {
     pills += '<span class="status-pill pill-sm">kein Upstream</span>';
   }
   $('p-pills').innerHTML = pills;
+  const lab = (id, base, n) => { const b = $(id); b.dataset.label = n ? `${base} (${n})` : base; if (!b.disabled) b.textContent = b.dataset.label; };
+  lab('btn-pull', 'Pull', w.behind || 0);
+  lab('btn-push', 'Push', w.upstream ? (w.ahead || 0) : 0);
 }
 
 /* ---------- Historie / Graph ---------------------------------------------------- */
@@ -337,7 +341,8 @@ function renderFiles() {
     const staged = list.filter((f) => f.staged === 'full').length;
     const some = list.filter((f) => f.staged !== 'none').length;
     head = `<div class="files-head"><input type="checkbox" class="fcheck" id="all-check" ${list.length && staged === list.length ? 'checked' : ''} ${list.length ? '' : 'disabled'} title="Alle stagen / unstagen">
-      <span>${list.length} Dateien &middot; ${some} gestaged</span></div>`;
+      <span>${list.length} Dateien &middot; ${some} gestaged</span><span class="spacer"></span>
+      <button class="btn-link danger" id="discard-all" ${list.length ? '' : 'disabled'} title="Alle Änderungen verwerfen">Alle verwerfen</button></div>`;
   } else {
     head = `<div class="files-head"><span>${list.length} Dateien</span></div>`;
   }
@@ -349,7 +354,7 @@ function renderFiles() {
     const chk = wip ? `<input type="checkbox" class="fcheck" data-chk="${i}" ${f.staged === 'full' ? 'checked' : ''} title="${f.staged === 'full' ? 'Gestaged' : 'Nicht gestaged'}">` : '';
     return `<div class="frow ${f.path === S.file ? 'is-sel' : ''}" data-i="${i}" title="${esc(f.path + (f.orig ? '  (von ' + f.orig + ')' : ''))}">
       ${chk}<span class="fst ${st}" title="${esc(STLABEL[f.st] || f.st)}">${esc(f.st)}</span>
-      <span class="fname">${esc(base)} <span class="dir">${esc(dir)}</span></span><span class="fstat">${stat}</span></div>`;
+      <span class="fname">${esc(base)} <span class="dir">${esc(dir)}</span></span><span class="fstat">${stat}</span>${wip ? `<button class="fdiscard" data-dis="${i}" title="Änderungen an dieser Datei verwerfen">${ICON.undo}</button>` : ''}</div>`;
   }).join('');
   $('files').innerHTML = head + (rows || '<div class="empty small">Keine Änderungen</div>');
   const all = $('all-check');
@@ -366,6 +371,9 @@ function renderFiles() {
 
 $('files').addEventListener('click', async (e) => {
   const list = files();
+  const dis = e.target.closest('[data-dis]');
+  if (dis) { e.stopPropagation(); discardFiles([list[+dis.dataset.dis]]); return; }
+  if (e.target.id === 'discard-all') { discardFiles(null); return; }
   const chk = e.target.closest('[data-chk]');
   if (chk) {
     const f = list[+chk.dataset.chk];
@@ -382,6 +390,26 @@ $('files').addEventListener('click', async (e) => {
   const row = e.target.closest('.frow');
   if (row) selectFile(list[+row.dataset.i].path);
 });
+
+async function discardFiles(sel) {
+  const list = files();
+  const targets = sel || list;
+  if (!targets.length) return;
+  const fresh = targets.filter((f) => f.untracked || f.st === 'A').length;
+  const what = sel ? `"${sel[0].path}"` : `alle ${targets.length} Dateien`;
+  const text = `Änderungen an ${what} werden verworfen (Index und Arbeitsverzeichnis).`
+    + (fresh ? ` ${fresh === 1 ? 'Eine neue Datei wird' : fresh + ' neue Dateien werden'} gelöscht.` : '')
+    + ' Das lässt sich nicht rückgängig machen.';
+  const ok = await modal({ title: 'Änderungen verwerfen?', text,
+    buttons: [{ label: 'Abbrechen', value: false }, { label: 'Verwerfen', value: true, cls: 'btn-danger' }] });
+  if (!ok) return;
+  try {
+    const r = await call('discard', S.cur, sel ? sel.map((f) => f.path) : null);
+    toast(`Verworfen: ${r.restored} zurückgesetzt, ${r.deleted} gelöscht`);
+  } catch (e) { toast(e.message, 'err'); }
+  await refreshWT(true);
+  loadHistory(true);
+}
 
 function selectFile(path) {
   S.file = path;
@@ -529,6 +557,34 @@ async function fetchCurrent() {
   await Promise.all([refreshWT(true), loadHistory(true)]);
 }
 $('btn-fetch').addEventListener('click', fetchCurrent);
+async function syncAction(kind) {
+  const w = S.wt;
+  if (!w) return;
+  const path = S.cur;
+  const btn = $(kind === 'pull' ? 'btn-pull' : 'btn-push');
+  const label = btn.dataset.label;
+  if (kind === 'push') {
+    const text = w.upstream
+      ? `${w.ahead || 0} Commit${w.ahead === 1 ? '' : 's'} nach ${w.upstream} pushen?${w.behind ? ` Achtung: ${w.behind} Commit(s) fehlen lokal, der Push wird vermutlich abgelehnt.` : ''}`
+      : `Der Branch "${w.branch}" hat keinen Upstream. Auf origin pushen und Upstream setzen?`;
+    const ok = await modal({ title: 'Push', text, buttons: [{ label: 'Abbrechen', value: false }, { label: 'Pushen', value: true, cls: 'btn-primary' }] });
+    if (!ok) return;
+  }
+  btn.disabled = true;
+  btn.textContent = kind === 'pull' ? 'Pull …' : 'Push …';
+  try {
+    const msg = await call(kind, path);
+    toast((kind === 'pull' ? 'Pull: ' : 'Push: ') + msg);
+  } catch (e) { toast(e.message, 'err'); }
+  btn.disabled = false;
+  btn.textContent = label;
+  await Promise.all([refreshWT(true), loadHistory(true)]);
+  loadDiff(true);
+}
+$('btn-pull').dataset.label = 'Pull';
+$('btn-push').dataset.label = 'Push';
+$('btn-pull').addEventListener('click', () => syncAction('pull'));
+$('btn-push').addEventListener('click', () => syncAction('push'));
 $('btn-refresh').addEventListener('click', () => { refreshWT(true); loadHistory(true); loadDiff(true); });
 $('btn-folder').addEventListener('click', () => call('open_folder', S.cur).catch((e) => toast(e.message, 'err')));
 $('btn-vscode').addEventListener('click', () => call('open_vscode', S.cur).catch((e) => toast(e.message, 'err')));
