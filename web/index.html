@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fast Git GUI</title>
+  <link rel="stylesheet" href="css/appdrasil.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell" id="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-head">
+        <span class="app-title">Fast Git GUI</span>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="btn-add" title="Projekt hinzufügen"></button>
+        <button class="icon-btn" id="btn-scan" title="Ordner nach Repositories durchsuchen"></button>
+        <button class="icon-btn" id="btn-fetch-all" title="Alle Projekte fetchen"></button>
+      </div>
+      <div class="side-filter"><input type="search" id="filter" placeholder="Projekte filtern"></div>
+      <div class="project-list" id="projects"></div>
+    </aside>
+    <div class="resizer" data-var="--w-side" data-min="180" data-max="480"></div>
+
+    <main class="main" id="main">
+      <div class="empty big hidden" id="no-project">
+        <h2>Noch kein Projekt</h2>
+        <p class="muted">Füge einen Ordner mit Git-Repository hinzu oder durchsuche einen Ordner nach mehreren Repositories.</p>
+        <div class="row"><button class="btn btn-primary" id="empty-add">Projekt hinzufügen</button>
+          <button class="btn btn-ghost" id="empty-scan">Ordner durchsuchen</button></div>
+      </div>
+
+      <div class="project-view hidden" id="project-view">
+        <header class="topbar">
+          <div class="proj-title">
+            <h1 id="p-name"></h1>
+            <span class="muted tiny nowrap-ellipsis" id="p-path"></span>
+          </div>
+          <div class="branch-wrap">
+            <button class="btn btn-ghost btn-sm" id="branch-btn"><span class="led led-sm led-info is-on"></span><span id="branch-name">-</span><span class="dim">&#9662;</span></button>
+            <div class="popover hidden" id="branch-pop">
+              <input type="search" id="branch-filter" placeholder="Branch suchen">
+              <div class="pop-list" id="branch-list"></div>
+            </div>
+          </div>
+          <span id="p-pills" class="row"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" id="btn-refresh" title="Aktualisieren (F5)">Aktualisieren</button>
+          <button class="btn btn-ghost btn-sm" id="btn-fetch" title="git fetch">Fetch</button>
+          <button class="btn btn-ghost btn-sm" id="btn-folder" title="Im Explorer öffnen">Ordner</button>
+          <button class="btn btn-ghost btn-sm" id="btn-vscode" title="In VS Code öffnen">VS Code</button>
+        </header>
+
+        <div class="panes" id="panes">
+          <section class="pane" id="pane-hist">
+            <div class="pane-head">
+              <span class="section-title grow">Historie</span>
+              <label class="switch switch-sm" title="Alle Branches und Tags anzeigen">
+                <input type="checkbox" id="all-refs" checked><span class="switch-track"></span><span class="switch-text">Alle Branches</span>
+              </label>
+            </div>
+            <div class="hist-list" id="hist"></div>
+          </section>
+          <div class="resizer" data-var="--w-hist" data-min="260" data-max="900"></div>
+
+          <section class="pane" id="pane-files">
+            <div class="pane-head"><span class="section-title grow" id="files-title">Änderungen</span></div>
+            <div class="commit-meta hidden" id="commit-meta"></div>
+            <div class="files-list" id="files"></div>
+            <div class="commit-box" id="commit-box">
+              <textarea id="msg" rows="3" placeholder="Commit-Nachricht"></textarea>
+              <div class="row-between">
+                <span class="hint tiny dim" id="commit-hint"></span>
+                <button class="btn btn-primary btn-sm" id="btn-commit">Committen</button>
+              </div>
+            </div>
+          </section>
+          <div class="resizer" data-var="--w-files" data-min="200" data-max="700"></div>
+
+          <section class="pane pane-diff" id="pane-diff">
+            <div class="pane-head">
+              <span class="section-title grow" id="diff-title">Diff</span>
+              <label class="switch switch-sm"><input type="checkbox" id="ignore-ws"><span class="switch-track"></span><span class="switch-text">Whitespace ignorieren</span></label>
+            </div>
+            <div class="diff-body" id="diff"><div class="empty">Datei auswählen</div></div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="modal"><div class="modal-box" id="modal-box"></div></div>
+  <div class="toasts" id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>

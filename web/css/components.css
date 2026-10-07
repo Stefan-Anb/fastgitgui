@@ -1,0 +1,497 @@
+/* ==========================================================================
+   AppDrasil: Dashboard-Bausteine
+   --------------------------------------------------------------------------
+   Setzt appdrasil.css voraus. Jedes Element ist ohne JavaScript benutzbar
+   (Zustaende ueber Klassen und CSS-Variablen); common/js/ui.js ist nur eine
+   bequeme Ansteuerung dafuer.
+   ========================================================================== */
+
+/* --- LED ------------------------------------------------------------------
+   <span class="led is-on" style="--led-color: var(--ok)"></span>
+   Zustaende: is-off (Standard), is-on, is-blink
+   Farbe: --led-color, beliebig. Groessen: led-sm, led-lg.
+   -------------------------------------------------------------------------- */
+
+.led {
+  --led-color: var(--neutral);
+  --led-size: 13px;
+  display: inline-block;
+  flex: none;
+  width: var(--led-size);
+  height: var(--led-size);
+  border-radius: 50%;
+  background: var(--led-color);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  /* Leichter Glanz oben, damit die LED plastisch wirkt, ohne bunt zu werden. */
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 55%);
+  box-shadow: 0 0 7px -1px var(--led-color);
+  transition: filter var(--dur-fast), box-shadow var(--dur-fast);
+  vertical-align: -2px;
+}
+
+/* Aus heisst dunkel, nicht unsichtbar: die Anordnung der Lampen soll auch im
+   Ruhezustand erkennbar bleiben. filter statt color-mix, weil das auf jedem
+   WebView funktioniert. */
+.led.is-off { filter: brightness(0.3) saturate(0.55); box-shadow: none; }
+.led.is-on  { filter: none; }
+.led.is-blink { animation: led-blink var(--led-period, 1s) steps(1, end) infinite; }
+
+@keyframes led-blink {
+  0%, 49.9% { filter: none; box-shadow: 0 0 7px -1px var(--led-color); }
+  50%, 100% { filter: brightness(0.3) saturate(0.55); box-shadow: none; }
+}
+
+.led-sm { --led-size: 9px; }
+.led-lg { --led-size: 18px; }
+
+/* Vorgefertigte Bedeutungen. Eigene Farben jederzeit per --led-color. */
+.led-ok      { --led-color: var(--ok); }
+.led-warn    { --led-color: var(--warn); }
+.led-danger  { --led-color: var(--danger); }
+.led-info    { --led-color: var(--info); }
+.led-neutral { --led-color: var(--neutral); }
+
+/* LED mit Beschriftung */
+.led-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-s);
+  font-size: var(--fs-s);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- Schalter -------------------------------------------------------------
+   <label class="switch">
+     <input type="checkbox">
+     <span class="switch-track"></span>
+     <span class="switch-text">Pumpe</span>
+   </label>
+   Dreiwertig: input.indeterminate = true  -> "unbekannt"
+   -------------------------------------------------------------------------- */
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-s);
+  cursor: pointer;
+  user-select: none;
+  min-height: 34px;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform var(--dur-fast), background-color var(--dur-fast);
+}
+
+.switch input:checked + .switch-track {
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg-elev));
+  border-color: var(--accent);
+}
+.switch input:checked + .switch-track::after {
+  transform: translateX(20px);
+  background: var(--accent);
+}
+
+/* Unbekannter Zustand: Knopf in der Mitte, gedaempft. Wichtig bei Geraeten,
+   die ihren Zustand nicht zurueckmelden. */
+.switch input:indeterminate + .switch-track::after {
+  transform: translateX(10px);
+  background: var(--text-muted);
+}
+.switch input:indeterminate + .switch-track { border-color: var(--border-strong); }
+
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: 0.4; }
+.switch:has(input:disabled) { cursor: not-allowed; }
+
+.switch-text { font-size: var(--fs-m); }
+
+/* --- Gauge (linear) -------------------------------------------------------
+   <div class="gauge" style="--value: 42; --min: 0; --max: 100">
+     <div class="gauge-head"><span>Ladezustand</span><span class="gauge-readout">42 %</span></div>
+     <div class="gauge-track">
+       <span class="gauge-zone is-warn"   style="--from: 0%; --to: 15%"></span>
+       <span class="gauge-fill"></span>
+       <span class="gauge-tick" style="--at: 20%"></span>
+     </div>
+     <div class="gauge-scale"><span>0</span><span>100</span></div>
+   </div>
+   Die Fuellbreite rechnet CSS selbst aus --value/--min/--max. ui.gauge()
+   uebernimmt Ticks, Zonen und Beschriftung.
+   -------------------------------------------------------------------------- */
+
+.gauge {
+  --value: 0;
+  --min: 0;
+  --max: 100;
+  --gauge-color: var(--accent);
+  --gauge-height: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.gauge-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-s);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--text-muted);
+}
+.gauge-readout {
+  font-size: var(--fs-m);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.gauge-track {
+  position: relative;
+  height: var(--gauge-height);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: clamp(0%, calc((var(--value) - var(--min)) / (var(--max) - var(--min)) * 100%), 100%);
+  background: var(--gauge-color);
+  border-radius: var(--radius-pill);
+  transition: width var(--dur) ease-out, background-color var(--dur-fast);
+}
+.gauge.is-warn   { --gauge-color: var(--warn); }
+.gauge.is-danger { --gauge-color: var(--danger); }
+.gauge.is-ok     { --gauge-color: var(--ok); }
+
+/* Begrenzungsbereiche, etwa "unter 15 % kritisch". Liegen unter der Fuellung,
+   damit die Fuellung immer ablesbar bleibt. */
+.gauge-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--from, 0%);
+  width: calc(var(--to, 0%) - var(--from, 0%));
+  background: currentColor;
+  opacity: 0.16;
+  color: var(--neutral);
+}
+.gauge-zone.is-warn   { color: var(--warn); }
+.gauge-zone.is-danger { color: var(--danger); }
+.gauge-zone.is-ok     { color: var(--ok); }
+
+/* Begrenzungs-Tick: duenner Strich quer ueber die Leiste. Helles Grau statt
+   Rahmenfarbe, weil der Strich sowohl auf der dunklen Leiste als auch auf der
+   farbigen Fuellung zu sehen sein muss. */
+.gauge-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: var(--at, 0%);
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.55);
+  z-index: 2;
+}
+.gauge-tick.is-limit { background: var(--danger); }
+.gauge-tick.is-target { background: var(--text); }
+
+.gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+/* Mehr als zwei Skalenwerte: gleichmaessig verteilt. */
+.gauge-scale.is-spread { justify-content: space-between; }
+
+/* --- Gauge (Bogen) --------------------------------------------------------
+   Fuer eine einzelne grosse Kennzahl. 270-Grad-Bogen, unten offen.
+   <div class="gauge-arc" style="--value: 62"><span class="gauge-arc-value">62<small>%</small></span></div>
+   Ticks gibt es hier bewusst nicht: auf dem Bogen werden sie schnell unleserlich,
+   dafuer ist die lineare Variante da.
+   -------------------------------------------------------------------------- */
+
+.gauge-arc {
+  --value: 0;
+  --min: 0;
+  --max: 100;
+  --gauge-color: var(--accent);
+  --arc-size: 150px;
+  --arc-width: 12px;
+  --_pct: clamp(0, calc((var(--value) - var(--min)) / (var(--max) - var(--min))), 1);
+  position: relative;
+  width: var(--arc-size);
+  height: var(--arc-size);
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(from 225deg,
+      var(--gauge-color) 0 calc(var(--_pct) * 270deg),
+      var(--bg-elev) calc(var(--_pct) * 270deg) 270deg,
+      transparent 270deg 360deg);
+  border-radius: 50%;
+  /* Ring statt Scheibe */
+  mask: radial-gradient(circle at 50% 50%, transparent calc(50% - var(--arc-width)), #000 calc(50% - var(--arc-width) + 1px));
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent calc(50% - var(--arc-width)), #000 calc(50% - var(--arc-width) + 1px));
+}
+.gauge-arc.is-warn   { --gauge-color: var(--warn); }
+.gauge-arc.is-danger { --gauge-color: var(--danger); }
+.gauge-arc.is-ok     { --gauge-color: var(--ok); }
+
+/* Der Wert sitzt ausserhalb der Maske, sonst wuerde sie ihn ausstanzen. */
+.gauge-arc-wrap { position: relative; display: inline-grid; place-items: center; }
+.gauge-arc-wrap > .gauge-arc { grid-area: 1 / 1; }
+.gauge-arc-value {
+  grid-area: 1 / 1;
+  font-size: var(--fs-xxl);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1;
+  text-align: center;
+}
+.gauge-arc-value small { font-size: 0.4em; font-weight: 500; color: var(--text-muted); }
+.gauge-arc-caption { grid-area: 1 / 1; align-self: end; font-size: var(--fs-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.9px; }
+
+/* --- Plot-Container -------------------------------------------------------
+   <div class="plot" style="--plot-h: 240px">
+     <div class="plot-head"><span class="plot-title">Zellspannungen</span><span class="plot-tools">...</span></div>
+     <div class="plot-body" id="chart"></div>
+   </div>
+   ui.plot() haengt einen ResizeObserver an, damit uPlot mitwaechst.
+   -------------------------------------------------------------------------- */
+
+.plot {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: var(--gap-s) var(--gap-m) var(--gap-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-s);
+  min-width: 0;
+}
+.plot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-s);
+  min-height: 26px;
+}
+.plot-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.plot-tools { display: flex; align-items: center; gap: var(--gap-s); }
+.plot-body {
+  position: relative;
+  height: var(--plot-h, 220px);
+  min-width: 0;
+}
+
+/* Serienfarben als Klassen, damit Legenden und Beschriftungen ohne Inline-Stil
+   auskommen. Reihenfolge ist fest, nicht zyklisch vergeben. */
+.series-1 { color: var(--series-1); }
+.series-2 { color: var(--series-2); }
+.series-3 { color: var(--series-3); }
+.series-4 { color: var(--series-4); }
+.series-5 { color: var(--series-5); }
+.series-6 { color: var(--series-6); }
+.series-7 { color: var(--series-7); }
+.series-8 { color: var(--series-8); }
+
+.legend { display: flex; flex-wrap: wrap; gap: var(--gap-s) var(--gap-m); font-size: var(--fs-s); color: var(--text-muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 10px; height: 2px; border-radius: 1px; background: currentColor; flex: none; }
+
+/* uPlot an das dunkle Thema anpassen (uPlot bringt helle Vorgaben mit). */
+.u-wrap { color: var(--text); }
+.u-legend { font-size: var(--fs-s) !important; color: var(--text-muted) !important; }
+.u-legend .u-marker { border-width: 2px !important; }
+.u-select { background: rgba(91, 155, 213, 0.15) !important; }
+.u-cursor-x, .u-cursor-y { border-color: var(--border-strong) !important; }
+.u-tooltip {
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  padding: 6px 8px;
+  font-size: var(--fs-s);
+}
+
+/* --- Log-Ansicht ----------------------------------------------------------
+   <div class="log" style="--log-h: 220px"></div>  + ui.log(el)
+   -------------------------------------------------------------------------- */
+
+.log {
+  background: #16181b;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: var(--gap-s);
+  height: var(--log-h, 220px);
+  overflow-y: auto;
+  font-size: var(--fs-s);
+  line-height: 1.55;
+  /* Feste Ziffernbreite statt zweiter Schriftart. */
+  font-variant-numeric: tabular-nums;
+}
+.log-line { display: flex; gap: var(--gap-s); word-break: break-word; }
+.log-time { color: var(--text-dim); flex: none; }
+.log-text { white-space: pre-wrap; }
+.log-line.is-ok   .log-text { color: var(--ok); }
+.log-line.is-warn .log-text { color: var(--warn); }
+.log-line.is-err  .log-text { color: var(--danger); }
+.log-line.is-tx   .log-text { color: var(--accent); }
+.log-line.is-rx   .log-text { color: var(--text); }
+
+/* --- Tabelle --------------------------------------------------------------
+   <table class="table"> ... <td class="num">12,3</td>
+   -------------------------------------------------------------------------- */
+
+.table { width: 100%; border-collapse: collapse; font-size: var(--fs-s); }
+.table th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+.table td { padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.table tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  overflow: auto;
+  max-height: var(--table-h, none);
+}
+
+/* --- Dialog ---------------------------------------------------------------
+   <div class="modal" hidden> <div class="modal-box"> ... </div> </div>
+   -------------------------------------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 12, 15, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gap-l);
+}
+.modal[hidden] { display: none; }
+.modal-box {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-2);
+  padding: var(--gap-l);
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-m);
+}
+.modal-title { font-size: var(--fs-l); font-weight: 600; }
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--gap-s); }
+
+/* --- Reiter innerhalb einer App ------------------------------------------ */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--fs-m);
+  font-weight: 500;
+  padding: 9px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.is-active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* --- Leerzustand und Ladeanzeige ----------------------------------------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-s);
+  padding: var(--gap-xl) var(--gap-l);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pulsierender Punkt fuer "Verbindung aktiv" */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.dot.is-pulse { animation: dot-pulse 1.5s ease-in-out infinite; }
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}

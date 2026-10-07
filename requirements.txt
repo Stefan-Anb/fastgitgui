@@ -1,0 +1,2 @@
+pywebview>=5.0
+pygments>=2.17
