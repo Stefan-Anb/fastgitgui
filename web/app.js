@@ -100,7 +100,7 @@ function renderProjects() {
         sub = 'nicht lesbar';
       }
       const dot = st && st.count ? 'led-warn' : 'led-ok';
-      return `<div class="proj ${p.path === S.cur ? 'is-active' : ''}" data-i="${i}" title="${esc(p.path)}">
+      return `<div class="proj ${p.path === S.cur ? 'is-active' : ''}" data-i="${i}" ${q ? '' : 'draggable="true"'} title="${esc(p.path)}">
         <span class="led led-sm ${st ? dot : 'led-neutral'} is-on"></span>
         <div class="proj-main"><div class="proj-name">${esc(p.name)}</div><div class="proj-sub">${esc(sub)}</div></div>
         <span class="proj-flags">${flags}</span>
@@ -628,6 +628,54 @@ $('projects').addEventListener('click', async (e) => {
   }
   const row = e.target.closest('.proj');
   if (row) selectProject(S.projects[+row.dataset.i].path);
+});
+
+/* ---------- Projekte per Drag&Drop sortieren ---------------------------------------------- */
+
+let dragIdx = null;
+const projEl = $('projects');
+const clearDropMarks = () => projEl.querySelectorAll('.drop-before, .drop-after').forEach((r) => r.classList.remove('drop-before', 'drop-after'));
+
+projEl.addEventListener('dragstart', (e) => {
+  const row = e.target.closest('.proj');
+  if (!row) return;
+  dragIdx = +row.dataset.i;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(dragIdx));
+  row.classList.add('is-dragging');
+});
+projEl.addEventListener('dragover', (e) => {
+  if (dragIdx === null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.target.closest('.proj');
+  clearDropMarks();
+  if (!row) return;
+  const r = row.getBoundingClientRect();
+  row.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+});
+projEl.addEventListener('dragleave', (e) => { if (!projEl.contains(e.relatedTarget)) clearDropMarks(); });
+projEl.addEventListener('dragend', () => {
+  dragIdx = null;
+  clearDropMarks();
+  projEl.querySelectorAll('.is-dragging').forEach((r) => r.classList.remove('is-dragging'));
+});
+projEl.addEventListener('drop', async (e) => {
+  if (dragIdx === null) return;
+  e.preventDefault();
+  const row = e.target.closest('.proj');
+  const from = dragIdx;
+  dragIdx = null;
+  if (!row) { clearDropMarks(); return; }
+  const r = row.getBoundingClientRect();
+  let to = +row.dataset.i + (e.clientY < r.top + r.height / 2 ? 0 : 1);
+  clearDropMarks();
+  if (to > from) to--;
+  if (to === from) return;
+  const [moved] = S.projects.splice(from, 1);
+  S.projects.splice(to, 0, moved);
+  renderProjects();
+  try { await call('reorder_projects', S.projects.map((p) => p.path)); } catch (err) { toast(err.message, 'err'); loadProjects(); }
 });
 
 /* ---------- Griffe zum Verschieben der Spalten ------------------------------------------- */

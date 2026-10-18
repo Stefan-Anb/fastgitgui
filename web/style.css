@@ -63,6 +63,13 @@ body { min-height: 0; }
 }
 .proj:hover { background: var(--panel); }
 .proj.is-active { background: var(--panel-2); border-color: var(--border-strong); }
+.proj.is-dragging { opacity: .4; }
+.proj.drop-before::before, .proj.drop-after::after {
+  content: ''; position: absolute; left: 4px; right: 4px; height: 2px;
+  background: var(--accent); border-radius: 1px; pointer-events: none;
+}
+.proj.drop-before::before { top: -2px; }
+.proj.drop-after::after { bottom: -2px; }
 .proj-main { flex: 1; min-width: 0; }
 .proj-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .proj-sub { font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

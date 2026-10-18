@@ -2,6 +2,7 @@
 import functools
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -132,6 +133,19 @@ class Api:
         return True
 
     @api
+    def reorder_projects(self, paths):
+        """Setzt die Reihenfolge; unbekannte Pfade werden ignoriert, fehlende hinten angehängt."""
+        by_norm = {self._norm(p): p for p in self._cfg["projects"]}
+        ordered = []
+        for p in paths:
+            real = by_norm.pop(self._norm(p), None)
+            if real:
+                ordered.append(real)
+        self._cfg["projects"] = ordered + list(by_norm.values())
+        self._save()
+        return True
+
+    @api
     def project_status(self, path):
         st = gitops.status(self._repo(path), numstat=False)
         st.pop("files")
@@ -227,7 +241,16 @@ class Api:
         return True
 
 
+def clear_web_cache():
+    """Loescht den HTTP-Cache des Webviews, damit geaenderte HTML/JS/CSS-Dateien immer neu geladen werden.
+    localStorage (Spaltenbreiten, letztes Projekt) liegt woanders und bleibt erhalten."""
+    base = os.path.join(DATA_DIR, "webview", "EBWebView", "Default")
+    for name in ("Cache", "Code Cache", "GPUCache"):
+        shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+
+
 def main():
+    clear_web_cache()
     a = Api()
     sys.excepthook = lambda t, v, tb: log_error("".join(traceback.format_exception(t, v, tb)))
     win = webview.create_window(
